@@ -1562,9 +1562,7 @@ DECL_SPECIAL(REP)
     unsigned *label;
     struct ureg_src rep = tx_src_param(tx, &tx->insn.src[0]);
     struct ureg_dst ctr;
-    struct ureg_dst tmp = tx_scratch_scalar(tx);
-    struct ureg_src imm =
-        tx->native_integers ? ureg_imm1u(ureg, 0) : ureg_imm1f(ureg, 0.0f);
+    struct ureg_dst tmp;
 
     label = tx_bgnloop(tx);
     ctr = tx_get_loopctr(tx, FALSE);
@@ -1572,33 +1570,40 @@ DECL_SPECIAL(REP)
     /* NOTE: rep must be constant, so we don't have to save the count */
     assert(rep.File == TGSI_FILE_CONSTANT || rep.File == TGSI_FILE_IMMEDIATE);
 
-    ureg_MOV(ureg, ctr, imm);
+    ureg_MOV(ureg, ureg_writemask(ctr, NINED3DSP_WRITEMASK_0), rep);
+    /* in the case ctr is float, remove 0.5 to avoid precision issues for comparisons */
+    if (!tx->native_integers)
+        ureg_ADD(ureg, ureg_writemask(ctr, NINED3DSP_WRITEMASK_0), ureg_src(ctr), ureg_imm1f(ureg, -0.5f));
+
     ureg_BGNLOOP(ureg, label);
-    if (tx->native_integers)
-    {
-        ureg_USGE(ureg, tmp, tx_src_scalar(ctr), rep);
-        ureg_UIF(ureg, tx_src_scalar(tmp), tx_cond(tx));
-    }
-    else
-    {
-        ureg_SGE(ureg, tmp, tx_src_scalar(ctr), rep);
+    tmp = tx_scratch_scalar(tx);
+
+    /* stop when crt.x <= 0 */
+    if (!tx->native_integers) {
+        ureg_SLE(ureg, tmp, ureg_scalar(ureg_src(ctr), TGSI_SWIZZLE_X), ureg_imm1f(ureg, 0.0f));
         ureg_IF(ureg, tx_src_scalar(tmp), tx_cond(tx));
+    } else {
+        ureg_ISGE(ureg, tmp, ureg_imm1i(ureg, 0), ureg_scalar(ureg_src(ctr), TGSI_SWIZZLE_X));
+        ureg_UIF(ureg, tx_src_scalar(tmp), tx_cond(tx));
     }
     ureg_BRK(ureg);
     tx_endcond(tx);
     ureg_ENDIF(ureg);
-
-    if (tx->native_integers) {
-        ureg_UADD(ureg, ctr, tx_src_scalar(ctr), ureg_imm1u(ureg, 1));
-    } else {
-        ureg_ADD(ureg, ctr, tx_src_scalar(ctr), ureg_imm1f(ureg, 1.0f));
-    }
 
     return D3D_OK;
 }
 
 DECL_SPECIAL(ENDREP)
 {
+    struct ureg_program *ureg = tx->ureg;
+    struct ureg_dst ctr = tx_get_loopctr(tx, FALSE);
+
+    if (!tx->native_integers) {
+        ureg_ADD(ureg, ureg_writemask(ctr, NINED3DSP_WRITEMASK_0), ureg_src(ctr), ureg_imm1f(ureg, -1.0f));
+    } else {
+        ureg_UADD(ureg, ureg_writemask(ctr, NINED3DSP_WRITEMASK_0), ureg_src(ctr), ureg_imm1i(ureg, -1.0));
+    }
+
     ureg_ENDLOOP(tx->ureg, tx_endloop(tx));
     return D3D_OK;
 }
