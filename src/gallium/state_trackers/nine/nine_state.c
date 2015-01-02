@@ -347,7 +347,6 @@ update_constants(struct NineDevice9 *device, unsigned shader_type)
     const int *const_i;
     const BOOL *const_b;
     uint32_t data_b[NINE_MAX_CONST_B];
-    uint32_t b_true;
     uint16_t dirty_i;
     uint16_t dirty_b;
     const unsigned usage = PIPE_TRANSFER_WRITE | PIPE_TRANSFER_DISCARD_RANGE;
@@ -381,7 +380,6 @@ update_constants(struct NineDevice9 *device, unsigned shader_type)
         dirty_b = device->state.changed.vs_const_b;
         device->state.changed.vs_const_b = 0;
         const_b = device->state.vs_const_b;
-        b_true = device->vs_bool_true;
 
         lconstf = &device->state.vs->lconstf;
         device->state.ff.clobber.vs_const = TRUE;
@@ -406,7 +404,6 @@ update_constants(struct NineDevice9 *device, unsigned shader_type)
         dirty_b = device->state.changed.ps_const_b;
         device->state.changed.ps_const_b = 0;
         const_b = device->state.ps_const_b;
-        b_true = device->ps_bool_true;
 
         lconstf = &device->state.ps->lconstf;
         device->state.ff.clobber.ps_const = TRUE;
@@ -421,7 +418,7 @@ update_constants(struct NineDevice9 *device, unsigned shader_type)
        x = buf->width0 - (NINE_MAX_CONST_B - i) * 4;
        c -= i;
        for (n = 0; n < c; ++n, ++i)
-          data_b[n] = const_b[i] ? b_true : 0;
+          data_b[n] = const_b[i];
        box.x = x;
        box.width = n * 4;
        DBG("upload ConstantB [%u .. %u]\n", x, x + n - 1);
@@ -491,9 +488,7 @@ update_vs_constants_userbuf(struct NineDevice9 *device)
     if (state->changed.vs_const_b) {
         int *idst = (int *)&state->vs_const_f[4 * device->max_vs_const_f];
         uint32_t *bdst = (uint32_t *)&idst[4 * NINE_MAX_CONST_I];
-        int i;
-        for (i = 0; i < NINE_MAX_CONST_B; ++i)
-            bdst[i] = state->vs_const_b[i] ? device->vs_bool_true : 0;
+        memcpy(bdst, state->vs_const_b, sizeof(state->vs_const_b));
         state->changed.vs_const_b = 0;
     }
 
@@ -557,9 +552,7 @@ update_ps_constants_userbuf(struct NineDevice9 *device)
     if (state->changed.ps_const_b) {
         int *idst = (int *)&state->ps_const_f[4 * device->max_ps_const_f];
         uint32_t *bdst = (uint32_t *)&idst[4 * NINE_MAX_CONST_I];
-        int i;
-        for (i = 0; i < NINE_MAX_CONST_B; ++i)
-            bdst[i] = state->ps_const_b[i] ? device->ps_bool_true : 0;
+        memcpy(bdst, state->ps_const_b, sizeof(state->ps_const_b));
         state->changed.ps_const_b = 0;
     }
 
