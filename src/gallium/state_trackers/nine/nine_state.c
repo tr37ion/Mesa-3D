@@ -33,6 +33,7 @@
 #include "pipe/p_context.h"
 #include "pipe/p_state.h"
 #include "cso_cache/cso_context.h"
+#include "util/u_upload_mgr.h"
 #include "util/u_math.h"
 
 #define DBG_CHANNEL DBG_DEVICE
@@ -514,6 +515,17 @@ update_vs_constants_userbuf(struct NineDevice9 *device)
         cb.user_buffer = dst;
     }
 
+    if (!device->driver_caps.user_cbufs) {
+        u_upload_data(device->constbuf_uploader,
+                      0,
+                      cb.buffer_size,
+                      cb.user_buffer,
+                      &cb.buffer_offset,
+                      &cb.buffer);
+        u_upload_unmap(device->constbuf_uploader);
+        cb.user_buffer = NULL;
+    }
+
     pipe->set_constant_buffer(pipe, PIPE_SHADER_VERTEX, 0, &cb);
 
     if (device->state.changed.vs_const_f) {
@@ -551,6 +563,17 @@ update_ps_constants_userbuf(struct NineDevice9 *device)
         uint32_t *bdst = (uint32_t *)&idst[4 * NINE_MAX_CONST_I];
         memcpy(bdst, state->ps_const_b, sizeof(state->ps_const_b));
         state->changed.ps_const_b = 0;
+    }
+
+    if (!device->driver_caps.user_cbufs) {
+        u_upload_data(device->constbuf_uploader,
+                      0,
+                      cb.buffer_size,
+                      cb.user_buffer,
+                      &cb.buffer_offset,
+                      &cb.buffer);
+        u_upload_unmap(device->constbuf_uploader);
+        cb.user_buffer = NULL;
     }
 
     pipe->set_constant_buffer(pipe, PIPE_SHADER_FRAGMENT, 0, &cb);
