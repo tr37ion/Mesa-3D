@@ -681,6 +681,41 @@ nvc0_validate_tess_state(struct nvc0_context *nvc0)
    PUSH_DATAp(push, nvc0->default_tess_inner, 2);
 }
 
+/* Disable POLYGON_OFFSET in case no depth stencil is bound.
+ * Apply correct offset for offset_units_unscaled.
+ */
+static void
+nvc0_validate_derived_4(struct nvc0_context *nvc0)
+{
+   struct nouveau_pushbuf *push = nvc0->base.pushbuf;
+   struct pipe_framebuffer_state *fb = &nvc0->framebuffer;
+   struct pipe_rasterizer_state *rast = &nvc0->rast->pipe;
+
+   if (!rast)
+      return;
+
+   if (!fb->zsbuf) {
+       BEGIN_NVC0(push, NVC0_3D(POLYGON_OFFSET_POINT_ENABLE), 3);
+       PUSH_DATAf    (push, 0);
+       PUSH_DATAf    (push, 0);
+       PUSH_DATAf    (push, 0);
+       return;
+   } else {
+       BEGIN_NVC0(push, NVC0_3D(POLYGON_OFFSET_POINT_ENABLE), 3);
+       PUSH_DATAf    (push, rast->offset_point);
+       PUSH_DATAf    (push, rast->offset_line);
+       PUSH_DATAf    (push, rast->offset_tri);
+   }
+
+   if (rast->offset_units_unscaled) {
+      BEGIN_NVC0(push, NVC0_3D(POLYGON_OFFSET_UNITS), 1);
+      if (fb->zsbuf->format == PIPE_FORMAT_Z16_UNORM)
+         PUSH_DATAf(push, rast->offset_units * (1 << 16));
+      else
+         PUSH_DATAf(push, rast->offset_units * (1 << 24));
+   }
+}
+
 static void
 nvc0_switch_pipe_context(struct nvc0_context *ctx_to)
 {
@@ -754,6 +789,7 @@ validate_list_3d[] = {
                                    NVC0_NEW_3D_RASTERIZER },
     { nvc0_validate_derived_2,     NVC0_NEW_3D_ZSA | NVC0_NEW_3D_FRAMEBUFFER },
     { nvc0_validate_derived_3,     NVC0_NEW_3D_BLEND | NVC0_NEW_3D_FRAMEBUFFER },
+    { nvc0_validate_derived_4,     NVC0_NEW_3D_RASTERIZER | NVC0_NEW_3D_FRAMEBUFFER },
     { nvc0_validate_clip,          NVC0_NEW_3D_CLIP | NVC0_NEW_3D_RASTERIZER |
                                    NVC0_NEW_3D_VERTPROG |
                                    NVC0_NEW_3D_TEVLPROG |
